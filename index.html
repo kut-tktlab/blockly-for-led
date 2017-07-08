@@ -14,7 +14,11 @@
   <script src="blockly/python_compressed.js"></script>
   <script src="blockly/msg/js/ja.js"></script>
   <script src="ledsimulator.js"></script>
+  <script src="coderunner.js"></script>
   <script src="example/example.js"></script>
+  <script>
+    var useLedSimulatorOnElectron = false;
+  </script>
   <style>
     body {
       background-color: #fff;
@@ -82,8 +86,8 @@
     <span style="display: inline-block; width: 80px;">
       <button onclick="runOrStopCode()" id="runButton">&#9658; Run</button>
     </span>
-    <span>
-      <button onclick="changeNLed()">すべて消灯</button>
+    <button onclick="clearLeds()" id="clearLedButton">すべて消灯</button>
+    <span id="simulatorButtons">
       <select onchange="changeNLed()" id="nled-selector">
         <option value="10">LED 10個</option>
         <option value="12">LED 12個</option>
@@ -92,7 +96,7 @@
     <span style="margin-left: 80px;">
       <button onclick="saveBlocks()"    id="saveButton"   >保存</button>
       <button onclick="restoreBlocks()" id="restoreButton">復元</button> &nbsp;&nbsp;
-      <button onclick="clearBlocks()"   id="clearButton"  >全消去</button>
+      <button onclick="clearBlocks()"   id="clearButton"  >プログラム消去</button>
       <span style="margin-left: 40px;">
       <button onclick="loadExample()"   id="exampleButton">プログラム例</button>
       </span>
@@ -432,11 +436,11 @@
       var code = Blockly.JavaScript.workspaceToCode(workspace);
       Blockly.JavaScript.INFINITE_LOOP_TRAP = null;
 
-      LedSimulator.Dispatcher.runCode(code);
+      CodeRunner.runCode(code);
     }
 
     function stopCode() {
-      LedSimulator.Dispatcher.stop();
+      CodeRunner.stop();
     }
 
     var runButtonMode = true;  // the button is "to Run"
@@ -448,11 +452,16 @@
       }
     }
 
+    function clearLeds() {
+      CodeRunner.runCode('addSetup(function(){clearAllLed();});')
+    }
+
     // Add an observer of the notification of state change.
-    LedSimulator.Dispatcher.addListener(dispatcherChangeState);
-    function dispatcherChangeState(isActive) {
+    CodeRunner.addListener(codeRunnerChangeState);
+    function codeRunnerChangeState(isActive) {
       var button = document.getElementById('runButton');
       var buttonsToDisable = [
+        document.getElementById('clearLedButton'),
         document.getElementById('saveButton'),
         document.getElementById('restoreButton'),
         document.getElementById('clearButton'),
@@ -472,16 +481,31 @@
       }
     }
 
-    var canvas = document.getElementById('simulatorCanvas');
-    LedSimulator.init(canvas);
+    if (typeof require === 'undefined' || useLedSimulatorOnElectron) {
+      var canvas = document.getElementById('simulatorCanvas');
+      LedSimulator.init(canvas);
+      CodeRunner.setTarget(LedSimulator);
+    } else {
+      // disable the simulator canvas and buttons
+      var canvas  = document.getElementById('simulatorCanvas');
+      var buttons = document.getElementById('simulatorButtons');
+      canvas.style.display = 'none';
+      buttons.style.display = 'none';
+
+      // connect to the LED object in the main process
+      if (typeof require !== 'undefined') {
+        var rem = require('electron');
+        CodeRunner.setTarget(require('electron').remote.getGlobal('ledStrip'));
+      }
+    }
 
     function changeNLed() {
-      LedSimulator.Dispatcher.stop();
+      CodeRunner.stop();
       var selector = document.getElementById('nled-selector');
       LedSimulator.setNLed(selector.options[selector.selectedIndex].value);
     }
     function setLedColor() {
-      LedSimulator.Dispatcher.stop();
+      CodeRunner.stop();
       var led = document.getElementById('ledsim-led').value;
       var color = document.getElementById('ledsim-color').value;
       LedSimulator.setLedColor(led, color);
