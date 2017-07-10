@@ -16,9 +16,7 @@
   <script src="ledsimulator.js"></script>
   <script src="coderunner.js"></script>
   <script src="example/example.js"></script>
-  <script>
-    var useLedSimulatorOnElectron = false;
-  </script>
+  <script src="node_modules/socket.io-client/dist/socket.io.js"></script>
   <style>
     body {
       background-color: #fff;
@@ -87,6 +85,11 @@
       <button onclick="runOrStopCode()" id="runButton">&#9658; Run</button>
     </span>
     <button onclick="clearLeds()" id="clearLedButton">すべて消灯</button>
+    <select onchange="changeTimeLimit()" id="timeLimitSelector">
+      <option value="10">10秒で停止</option>
+      <option value="30">30秒で停止</option>
+      <option value="72000">無制限</option>
+    </select>
     <span id="simulatorButtons">
       <select onchange="changeNLed()" id="nled-selector">
         <option value="10">LED 10個</option>
@@ -430,13 +433,13 @@
 
     function runCode() {
       // Generate JavaScript code and run it.
-      window.LoopTrap = 1000;
+      //window.LoopTrap = 1000;
       Blockly.JavaScript.INFINITE_LOOP_TRAP =
-          'if (--window.LoopTrap == 0) throw "Infinite loop.";\n';
+          'if (--LoopTrap == 0) throw "Infinite loop.";\n';
       var code = Blockly.JavaScript.workspaceToCode(workspace);
       Blockly.JavaScript.INFINITE_LOOP_TRAP = null;
 
-      CodeRunner.runCode(code);
+      CodeRunner.runCode(code, codeRunnerChangeState, window.alert);
     }
 
     function stopCode() {
@@ -453,15 +456,16 @@
     }
 
     function clearLeds() {
-      CodeRunner.runCode('addSetup(function(){clearAllLed();});')
+      var code = 'addSetup(function(){clearAllLed();});';
+      CodeRunner.runCode(code, codeRunnerChangeState, window.alert);
     }
 
-    // Add an observer of the notification of state change.
-    CodeRunner.addListener(codeRunnerChangeState);
+    // An observer of the notification of state change.
     function codeRunnerChangeState(isActive) {
       var button = document.getElementById('runButton');
       var buttonsToDisable = [
         document.getElementById('clearLedButton'),
+        document.getElementById('timeLimitSelector'),
         document.getElementById('saveButton'),
         document.getElementById('restoreButton'),
         document.getElementById('clearButton'),
@@ -481,24 +485,26 @@
       }
     }
 
-    if (typeof require === 'undefined' || useLedSimulatorOnElectron) {
+    if (typeof io === 'undefined' || window.location.protocol == 'file:') {
       var canvas = document.getElementById('simulatorCanvas');
       LedSimulator.init(canvas);
       CodeRunner.setTarget(LedSimulator);
     } else {
+      var socketio = io.connect(); // connect to window.location
+      CodeRunner = CodeRunner.createStub(socketio);
+
       // disable the simulator canvas and buttons
       var canvas  = document.getElementById('simulatorCanvas');
       var buttons = document.getElementById('simulatorButtons');
       canvas.style.display = 'none';
       buttons.style.display = 'none';
-
-      // connect to the LED object in the main process
-      if (typeof require !== 'undefined') {
-        var rem = require('electron');
-        CodeRunner.setTarget(require('electron').remote.getGlobal('ledStrip'));
-      }
     }
 
+    function changeTimeLimit() {
+      CodeRunner.stop();
+      var selector = document.getElementById('timeLimitSelector');
+      CodeRunner.setTimeLimit(selector.options[selector.selectedIndex].value);
+    }
     function changeNLed() {
       CodeRunner.stop();
       var selector = document.getElementById('nled-selector');

@@ -3,23 +3,32 @@
  * 
  * CodeRunner
  *   .setTarget(target) - set the target object, e.g. LedSimulator.
- *   .runCode(code) - run the code with the task dispatcher.
- *   .stop()        - stop the task dispatcher.
- *   .addListener(listener) - add an observer of dispatcher's state change.
+ *   .runCode(code, stateChangeListener, alertListener)
+ *                      - run the code with the task dispatcher.
+ *   .stop()            - stop the task dispatcher.
+ *   .setTimeLimit(sec) - set the time limit to run a code.
  */
 
 var CodeRunner = (function () {
+  /** automatically stop after a time limit expires (sec) */
+  var timeLimit = 10;
+  var startTime = null;  // set by runCode()
+
   /** queues of tasks */
   var setupFuncs = [];
   var loopFuncs = [];
   var dispatchQueue = [];
 
   /** list of observers of dispatcher's state change */
-  var observers = [];
+  var stateChangeListener = null;
+  var alertListener = null;  // observer of errors
 
   /** when true, the dispatching functions stop. */
   var stopReq = false;  // request to stop
   var active  = false;  // actual state of the dispatcher
+
+  /** counter for avoding infinite loops */
+  var LoopTrap = 1000;
 
   /** target for control */
   var target = { // a dummy target
@@ -35,18 +44,18 @@ var CodeRunner = (function () {
     stop: function () {
       if (active) { stopReq = true; }
     },
-    addListener: function (listener) {
-      observers.push(listener);
-    },
-    setTarget: function (t) { target = t; }
+    setTarget: function (t) { target = t; },
+    setTimeLimit: function (sec) { timeLimit = sec; },
+    createStub: createStub_  // for communicating with server.js
   };
 
-  function runCode_(code) {
+  function runCode_(code, stateChange, alert) {
     // the dispatcher is still active?
     if (active) {
       // request to stop and wait a moment
       stopReq = true;
-      setTimeout(function () { runCode_(code); }, 10);
+      setTimeout(function () {
+        runCode_(code, stateChange, alert); }, 10);
       return;
     }
 
@@ -54,12 +63,17 @@ var CodeRunner = (function () {
     loopFuncs  = [];
     dispatchQueue = [];
     stopReq = false;
+    startTime = null;
+    LoopTrap = 1000;
+    stateChangeListener = stateChange;
+    alertListener = alert;
     try {
       eval(code);
       setActive_();
+      startTime = new Date();
       runSetup_(0);
     } catch (e) {
-      alert(e);
+      alertListener(e);
     }
   }
 
@@ -69,16 +83,12 @@ var CodeRunner = (function () {
   function setActive_() {
     target.open();
     active = true;
-    for (var i = 0; i < observers.length; i++) {
-      (observers[i])(active);
-    }
+    stateChangeListener(active);
   }
   function setInactive_() {
     target.close();
     active = false;
-    for (var i = 0; i < observers.length; i++) {
-      (observers[i])(active);
-    }
+    stateChangeListener(active);
   }
 
   /*
@@ -135,7 +145,7 @@ var CodeRunner = (function () {
     }
     try {
       // reset the loop-avoidance counter
-      window.LoopTrap = 1000;
+      LoopTrap = 1000;
       // execute a setup function
       (setupFuncs[index])();
       index++;
@@ -145,7 +155,7 @@ var CodeRunner = (function () {
       }, 0);
     } catch (e) {
       setInactive_();
-      alert(e);
+      alertListener(e);
     }
   }
 
@@ -154,6 +164,11 @@ var CodeRunner = (function () {
    * @param {int} index  index of the function to be executed in loopFuncs.
    */
   function runLoop_(index) {
+    if (startTime &&
+        new Date().getTime() - startTime.getTime() > timeLimit * 1000)
+    {
+      stopReq = true;
+    }
     if (stopReq) { setInactive_(); return; }
     target.flush();
     if (index >= loopFuncs.length) {
@@ -163,7 +178,7 @@ var CodeRunner = (function () {
     }
     try {
       // reset the loop-avoidance counter
-      window.LoopTrap = 1000;
+      LoopTrap = 1000;
       // execute a loop function
       (loopFuncs[index])();
       index = (index + 1) % loopFuncs.length;
@@ -174,8 +189,40 @@ var CodeRunner = (function () {
       }, 0);
     } catch (e) {
       setInactive_();
-      alert(e);
+      alertListener(e);
     }
   }
 
+  /**
+   * A function for creating a stub for communicating with
+   * the CodeRunner in the server.js.
+   * If you use server.js,
+   * do `CodeRunner = CodeRunner.createStub(io.connect());`
+   * in the client side.
+   */
+  function createStub_(socket) {
+    socket.on('changeState', function (active) {
+      stateChangeListener(active);
+    });
+    socket.on('alert', function (msg) {
+      window.alert(msg);
+    });
+    return {
+      runCode: function (code, stateChange, alert) {
+        stateChangeListener = stateChange;
+        alertListener = alert;
+        socket.emit('runCode', code);
+      },
+      stop:    function ()     { socket.emit('stop'); },
+      setTimeLimit:
+               function (sec)  { socket.emit('setTimeLimit', sec); },
+      setTarget: undefined
+    };
+  }
+
 })();
+
+// A trick to use this module on both node.js and a browser.
+(function (exports) {
+  exports.CodeRunner = CodeRunner;
+})(typeof exports === 'undefined' ? this.coderunner = {} : exports);
