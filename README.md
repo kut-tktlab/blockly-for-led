@@ -23,7 +23,7 @@
 LEDシミュレータを使う場合は，
 `git clone` して `index.html` をブラウザで開いてください。
 
-実LEDを使う手順は[Wiki](https://github.com/kut-tktlab/blockly-for-led/wiki/Raspbian,-Node.js,-Electron)に記載しています。
+実LEDを使う手順は[Wiki](https://github.com/kut-tktlab/blockly-for-led/wiki/Raspbian,-Node.js,-serial-led-pi)に記載しています。
 
 ## 改造
 
