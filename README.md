@@ -27,12 +27,13 @@ LEDシミュレータを使う場合は，
 `git clone` して `index.html` をブラウザで開いてください。
 
 実LEDを使う場合は，LEDテープを繋いだRaspberry Piに
-[Node.js](https://nodejs.org) (実行環境),
+(1) [Node.js](https://nodejs.org) (実行環境),
 [npm](https://www.npmjs.com) (パッケージマネージャ),
 [node-gyp](https://github.com/nodejs/node-gyp) (ビルドツール)
-をインストールし，
-[serial-led-pi](https://github.com/kut-tktlab/serial-led-pi/)
-のNode.js用アドオンをビルドして，
+をインストール，
+(2) [serial-led-pi](https://github.com/kut-tktlab/serial-led-pi/)
+のNode.js用アドオンをビルド (`node-gyp configure build`)，
+(3) [socket.io](https://socket.io)をインストール (`npm install`) して，
 `sudo node server.js` を実行してください (サーバの起動)。
 その後，ブラウザで `http://ラズパイのアドレス:8080/` を開いてください。
 ブラウザはRaspberry Pi上で動かしても別の機械で動かしても構いません。  
