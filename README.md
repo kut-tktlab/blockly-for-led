@@ -84,7 +84,7 @@ Blocklyを改造した場合，以下のどちらかの作業が必要です。
 1. `build.py` を実行して `blockly_compressed.js` 等を再構築する。
 2. index.html にて，`blockly_compressed.js` 等の代わりに `core/`, `blocks/`
 等の下の個々のjsファイルをロードする
-(詳しくは上記Guidesの[Building](https://developers.google.com/blockly/guides/modify/web/building)を参照)。
+(詳しくは上記Blockly Guidesの[Building](https://developers.google.com/blockly/guides/modify/web/building)を参照)。
 
 `build.py` を実行する場合は
 [Closure Library](https://developers.google.com/closure/library/)
